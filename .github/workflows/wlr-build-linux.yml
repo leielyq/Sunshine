@@ -1,0 +1,16 @@
+---
+name: wlr-build-linux
+permissions: {}
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Linux AppImage (wlr-virtual-input)
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci-linux.yml
+    with:
+      release_commit: 11c3fd3d478223e012b62413f86e3d106f32d557
+      release_version: v0.0.0+wlr.11c3fd3d
