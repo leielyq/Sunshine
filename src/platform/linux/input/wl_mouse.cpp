@@ -204,10 +204,11 @@ namespace platf::wl_mouse {
 
   void
   scroll(state_t *state, int high_res_distance) {
-    // Sunshine uses 120 units per detent (same as Windows HID).
-    // Convert to a pixel-like wl_fixed_t value; 15 px per detent is a common desktop default.
-    wl_fixed_t value = wl_fixed_from_double(high_res_distance / 120.0 * 15.0);
-    int32_t discrete = high_res_distance / 120;  // whole detents
+    // Sunshine uses 120 units per detent (same as Windows HID), positive = up (evdev REL_WHEEL
+    // convention). The wl_pointer vertical axis uses the OPPOSITE sign: positive = down
+    // (libinput flips vertical only; horizontal keeps evdev sign). Negate so wheel-up stays up.
+    wl_fixed_t value = wl_fixed_from_double(-(high_res_distance / 120.0) * 15.0);
+    int32_t discrete = -(high_res_distance / 120);  // whole detents
 
     zwlr_virtual_pointer_v1_axis_source(state->pointer, WL_POINTER_AXIS_SOURCE_WHEEL);
     zwlr_virtual_pointer_v1_axis(state->pointer, now_ms(), WL_POINTER_AXIS_VERTICAL_SCROLL, value);
