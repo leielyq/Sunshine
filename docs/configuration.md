@@ -688,6 +688,37 @@ editing the `conf` file in a text editor. Use the examples as reference.
     </tr>
 </table>
 
+### wlr_virtual_mouse
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            When enabled, mouse input from the client is injected through the wlroots virtual pointer
+            Wayland protocol instead of the kernel level uinput device.
+            <br>
+            Requires a Wayland compositor supporting the wlr-virtual-pointer-unstable-v1 protocol,
+            such as Sway or another wlroots based compositor. The virtual pointer is bound to the
+            captured output so absolute motion is interpreted in the local coordinate space of that
+            output, which is useful in nested compositor and headless virtual display setups.
+            @hint{Only available on Linux when Sunshine is built with Wayland support. Keyboard and
+            gamepad input are unaffected and still require uinput.}
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            disabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            wlr_virtual_mouse = enabled
+            @endcode</td>
+    </tr>
+</table>
+
 ### keybindings
 
 <table>
