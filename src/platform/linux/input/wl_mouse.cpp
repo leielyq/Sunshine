@@ -10,6 +10,7 @@
 #ifdef SUNSHINE_BUILD_WAYLAND
 
 // standard includes
+#include <cstdlib>
 #include <ctime>
 
 // lib includes
@@ -79,9 +80,15 @@ namespace platf::wl_mouse {
 
   bool
   state_t::init() {
-    display = wl_display_connect(nullptr);
+    // 【2026-10-26 .42 判例】WL_MOUSE_DISPLAY 独立指定 socket：x11 捕获会话下
+    // WAYLAND_DISPLAY 不得设置（sunshine 的 window_system 判定会抢判 wayland 导致
+    // verify_x11 恒 false），而 wl_display_connect(nullptr) 恰好也读 WAYLAND_DISPLAY
+    // ——两处共用一个变量无法并存。设了 WL_MOUSE_DISPLAY 则直连该 socket（如
+    // wayland-1），否则维持上游行为（读 WAYLAND_DISPLAY）。
+    const char *wl_sock = std::getenv("WL_MOUSE_DISPLAY");
+    display = wl_display_connect(wl_sock ? wl_sock : nullptr);
     if (!display) {
-      BOOST_LOG(error) << "wl_mouse: failed to connect to Wayland display (is WAYLAND_DISPLAY set?)";
+      BOOST_LOG(error) << "wl_mouse: failed to connect to Wayland display (WAYLAND_DISPLAY/WL_MOUSE_DISPLAY set?)";
       return false;
     }
 
