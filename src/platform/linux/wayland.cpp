@@ -396,29 +396,45 @@ namespace wl {
     }
 
     // Get buffer info
-    int fd = gbm_bo_get_fd(current_bo);
-    if (fd < 0) {
-      BOOST_LOG(error) << "Failed to get buffer FD"sv;
-      gbm_bo_destroy(current_bo);
-      current_bo = nullptr;
-      zwlr_screencopy_frame_v1_destroy(frame);
-      status = REINIT;
-      return;
-    }
-
-    uint32_t stride = gbm_bo_get_stride(current_bo);
+    // [2026-10-27 多平面导出移植] 对齐上游 fb92530d "export all Wayland DMA-BUF planes"：
+    //   原实现只导出 plane 0（fd/stride/offset 硬编码单平面），而 surface_descriptor_t 与
+    //   EGL 导入端（graphics.cpp map_plane_attribs）本来就是 4 平面循环——NV12 等 2 平面
+    //   格式的 UV 平面整体丢失 → 色度错乱 → 客户端 MSE 周期性解码错误（500ms-IDR 请求
+    //   循环）→ 串流黑屏闪烁（.42 RTX 4000 Ada 实测：GBM 分配成功仍黑闪的根因）。
+    //   按 gbm_bo_get_plane_count 逐平面导出 fd/stride/offset，zwp params 同步多平面。
+    const auto plane_count = gbm_bo_get_plane_count(current_bo);
     uint64_t modifier = gbm_bo_get_modifier(current_bo);
 
     // Store in surface descriptor for later use
     auto next_frame = get_next_frame();
-    next_frame->sd.fds[0] = fd;
-    next_frame->sd.pitches[0] = stride;
-    next_frame->sd.offsets[0] = 0;
+    for (auto plane = 0; plane < plane_count; ++plane) {
+      int plane_fd = gbm_bo_get_fd_for_plane(current_bo, plane);
+      if (plane_fd < 0) {
+        BOOST_LOG(error) << "Failed to get buffer FD for plane "sv << plane;
+        for (auto x = 0; x < plane; ++x) {
+          close(next_frame->sd.fds[x]);
+          next_frame->sd.fds[x] = -1;
+        }
+        gbm_bo_destroy(current_bo);
+        current_bo = nullptr;
+        zwlr_screencopy_frame_v1_destroy(frame);
+        status = REINIT;
+        return;
+      }
+      next_frame->sd.fds[plane] = plane_fd;
+      next_frame->sd.pitches[plane] = gbm_bo_get_stride_for_plane(current_bo, plane);
+      next_frame->sd.offsets[plane] = gbm_bo_get_offset(current_bo, plane);
+    }
     next_frame->sd.modifier = modifier;
 
-    // Create linux-dmabuf buffer
+    // Create linux-dmabuf buffer (per-plane params, shared modifier)
     auto params = zwp_linux_dmabuf_v1_create_params(dmabuf_interface);
-    zwp_linux_buffer_params_v1_add(params, fd, 0, 0, stride, modifier >> 32, modifier & 0xffffffff);
+    for (auto plane = 0; plane < plane_count; ++plane) {
+      zwp_linux_buffer_params_v1_add(
+        params, next_frame->sd.fds[plane], plane,
+        next_frame->sd.offsets[plane], next_frame->sd.pitches[plane],
+        modifier >> 32, modifier & 0xffffffff);
+    }
 
     // Add listener for buffer creation
     zwp_linux_buffer_params_v1_add_listener(params, &params_listener, frame);
