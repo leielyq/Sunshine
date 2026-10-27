@@ -12,5 +12,5 @@ jobs:
       contents: read
     uses: ./.github/workflows/ci-linux.yml
     with:
-      release_commit: PLACEHOLDER
-      release_version: v0.0.0+wlr.a5cdf2f
+      release_commit: b9b359c8c3aada803f227e294027c12dc07a8079
+      release_version: v0.0.0+wlr.b9b359c
