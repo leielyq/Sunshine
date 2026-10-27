@@ -374,7 +374,20 @@ namespace wl {
     }
 
     // Create GBM buffer
-    current_bo = gbm_bo_create(gbm_device, dmabuf_info.width, dmabuf_info.height, dmabuf_info.format, GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
+    // [2026-10-27 NVIDIA 修复] 原实现 GBM_BO_USE_RENDERING|GBM_BO_USE_LINEAR 在 NVIDIA GBM
+    //   后端逐帧失败（NVIDIA 不支持线性修饰符分配）→ "Failed to create GBM buffer" 刷屏、
+    //   串流黑屏。对齐上游 master 的三级回退：先显式 LINEAR 修饰符（Mesa 路径，注：
+    //   GBM_BO_USE_LINEAR 标志位与 modifiers2 不兼容，Mesa 会拒绝）→ 退回原生分配
+    //   （NVIDIA 分配出其原生修饰符如 NVIDIA_BLOCK_LINEAR_2D，gbm_bo_get_modifier 会
+    //   带回真实修饰符传给 wlroots）。
+    {
+      constexpr std::uint64_t linear_modifier = DRM_FORMAT_MOD_LINEAR;
+      current_bo = gbm_bo_create_with_modifiers2(gbm_device, dmabuf_info.width, dmabuf_info.height, dmabuf_info.format, &linear_modifier, 1, GBM_BO_USE_RENDERING);
+      if (!current_bo) {
+        BOOST_LOG(debug) << "Linear screencopy buffer unavailable, falling back to native allocation"sv;
+        current_bo = gbm_bo_create(gbm_device, dmabuf_info.width, dmabuf_info.height, dmabuf_info.format, GBM_BO_USE_RENDERING);
+      }
+    }
     if (!current_bo) {
       BOOST_LOG(error) << "Failed to create GBM buffer"sv;
       zwlr_screencopy_frame_v1_destroy(frame);
